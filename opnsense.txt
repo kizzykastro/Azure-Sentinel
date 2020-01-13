@@ -1,0 +1,58 @@
+// opnSense/pfSense Parser
+// Last Updated Date: Jan 13,  2020
+// Using rsyslog to ship logs to workspace
+// Only filterlog currently parsed
+// Save as function and use the alias in your queries
+let LogBase = Syslog
+| where ProcessName == "filterlog" 
+| extend RenderedDescription = split(SyslogMessage, ",")
+| project TimeGenerated, Computer, HostIP, RenderedDescription 
+| extend Interface = tostring(RenderedDescription[4]), Action =  tostring(RenderedDescription[6]), Direction = tostring(RenderedDescription[7]),
+    IpVersion = toint(RenderedDescription[8]), ProtocolID = toint(RenderedDescription[15]), FirewallName = Computer 
+;
+let Ipv4LogsTCP=(){
+let processEvents = LogBase
+| where IpVersion == 4 and ProtocolID == 6
+| extend TTL = toint(RenderedDescription[11]), Protocol = tostring(RenderedDescription[16]),
+    SourceIP = RenderedDescription[18], DestinationIP = RenderedDescription[19], SourcePort = RenderedDescription[20], DestinationPort = RenderedDescription[21],
+    TCPFlags = RenderedDescription[23], Flags = RenderedDescription[14]
+;
+processEvents;
+};
+let Ipv4LogsUDP=(){
+let processEvents = LogBase
+| where IpVersion == 4 and ProtocolID == 17
+| extend TTL = toint(RenderedDescription[11]), Protocol = tostring(RenderedDescription[16]),
+    SourceIP = RenderedDescription[18], DestinationIP = RenderedDescription[19], SourcePort = RenderedDescription[20], DestinationPort = RenderedDescription[21],
+    Flags = RenderedDescription[14]
+;
+processEvents;
+};
+let Ipv4LogsIGMP=(){
+let processEvents = LogBase
+| where IpVersion == 4 and ProtocolID == 2
+| extend Protocol = tostring(RenderedDescription[16]),
+    SourceIP = RenderedDescription[18], DestinationIP = RenderedDescription[19], Flags = RenderedDescription[14]
+;
+processEvents;
+};
+let Ipv4LogsICMP=(){
+let processEvents = LogBase
+| where IpVersion == 4 and ProtocolID == 1
+| extend TTL = toint(RenderedDescription[11]), Protocol = tostring(RenderedDescription[16]),
+    SourceIP = RenderedDescription[18], DestinationIP = RenderedDescription[19], Flags = RenderedDescription[14]
+;
+processEvents;
+};
+let Ipv6Logs=(){
+let processEvents = LogBase
+| where IpVersion == 6 
+| extend HopLimit = toint(RenderedDescription[11]), Protocol = tostring(RenderedDescription[12]), ProtocolID = toint(RenderedDescription[13]),
+    SourceIP = RenderedDescription[15], DestinationIP = RenderedDescription[16], SourcePort = RenderedDescription[17], DestinationPort = RenderedDescription[18]
+;
+processEvents;
+};
+(union isfuzzy=true
+Ipv4LogsTCP,Ipv4LogsUDP,Ipv4LogsIGMP,Ipv4LogsICMP, Ipv6Logs)
+| project TimeGenerated, FirewallName, Interface, Action, Direction, Protocol, SourceIP, DestinationIP, SourcePort, DestinationPort
+
